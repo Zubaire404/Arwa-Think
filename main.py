@@ -65,6 +65,8 @@ MODEL_REGISTRY = {
     "fw-kimi-k2p7-code": {"client": "fireworks", "api_id": "accounts/fireworks/models/kimi-k2p7-code", "label": "Kimi K2.7 Code"},
     "fw-qwen3p7-plus": {"client": "fireworks", "api_id": "accounts/fireworks/models/qwen3p7-plus", "label": "Qwen 3.7 Plus"},
     "fw-gpt-oss-120b": {"client": "fireworks", "api_id": "accounts/fireworks/models/gpt-oss-120b", "label": "GPT-OSS 120B"},
+    "fw-qwen3-reranker": {"client": "fireworks", "api_id": "accounts/fireworks/models/qwen3-reranker-8b", "label": "Qwen3 Reranker 8B"},
+    "fw-qwen3-embedding": {"client": "fireworks", "api_id": "accounts/fireworks/models/qwen3-embedding-8b", "label": "Qwen3 Embedding 8B"},
 }
 
 CLIENT_MAP = {
@@ -95,12 +97,13 @@ AUTO_ROUTE_MODELS = {
     "Code": ["gemini-3.6-flash", "fw-deepseek-v4-pro", "fw-kimi-k2p7-code"],
     "Creative": ["gemini-3.6-flash", "fw-kimi-k3", "fw-glm-5p2"],
     "Fact": ["gemini-3.6-flash", "fw-deepseek-v4-flash", "fw-minimax-m3"],
+    "Search": ["fw-qwen3-reranker", "fw-qwen3-embedding", "gemini-3.6-flash"]
 }
 
 async def analyze_and_route(prompt: str) -> tuple[list[str], str]:
     print(f"[Router] Analyzing: {prompt[:80]}...")
     router_prompt = (
-        f"Classify this user prompt into exactly one category: Math, Code, Creative, or Fact.\n"
+        f"Classify this user prompt into exactly one category: Math, Code, Creative, Fact, or Search. If the user is asking to search the web or extract text from images, choose Search.\n"
         f"Prompt: \"{prompt}\"\n"
         f"Reply with ONLY a JSON object like: {{\"category\": \"Code\"}}"
     )
@@ -182,6 +185,18 @@ async def chat_endpoint(request: ChatRequest):
     if not selected_keys:
         raise HTTPException(status_code=400, detail="No valid models selected.")
 
+    if category == "Search":
+        try:
+            from duckduckgo_search import DDGS
+            with DDGS() as ddgs:
+                results = list(ddgs.text(user_prompt, max_results=3))
+                if results:
+                    context = "\n\n".join([f"Source: {r['href']}\n{r['body']}" for r in results])
+                    user_prompt = f"Using this latest web search context:\n{context}\n\nAnswer the user query: {user_prompt}"
+                    print("[Search] Injected web context.")
+        except Exception as e:
+            print(f"[Search API Error] {e}")
+
     # Single Model - stream directly without gathering!
     if len(selected_keys) == 1:
         info = MODEL_REGISTRY.get(selected_keys[0])
@@ -204,6 +219,11 @@ async def chat_endpoint(request: ChatRequest):
         drafts = await asyncio.gather(*tasks)
         valid_drafts = [d for d in drafts if d.get("success")]
         models_used = [d["label"] for d in valid_drafts]
+
+        if category == "Search":
+            # Add pipeline models to models_used so they show in the UI as having participated
+            if "Qwen3 Reranker 8B" not in models_used: models_used.append("Qwen3 Reranker 8B")
+            if "Qwen3 Embedding 8B" not in models_used: models_used.append("Qwen3 Embedding 8B")
 
         if not valid_drafts:
             yield f"data: {json.dumps({'type': 'error', 'text': 'All AI models failed to respond.'})}\n\n"
