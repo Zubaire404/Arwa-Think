@@ -185,6 +185,9 @@
             border-bottom: 1px solid rgba(255,255,255,0.05);
             padding-bottom: 1rem;
             margin-bottom: 0.5rem;
+            max-height: 45vh;
+            overflow-y: auto;
+            flex-shrink: 0;
         }
         .sidebar-custom-title {
             font-family: 'JetBrains Mono', monospace;
@@ -359,6 +362,11 @@
         /* Markdown Styles inside Messages */
         .message-bubble p { margin-bottom: 1rem; }
         .message-bubble p:last-child { margin-bottom: 0; }
+        .message-bubble img {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-top: 8px;
+        }
         .message-bubble pre { 
             background: #12101b; 
             padding: 1rem; 
@@ -522,7 +530,7 @@
         <button class="new-chat-btn" onclick="startNewChat()">+ New conversation</button>
         
         <div class="sidebar-custom-picker" id="sidebar-custom-picker" style="display: none;">
-            <div class="sidebar-custom-title">Custom Synthesis</div>
+            <div class="sidebar-custom-title" id="sidebar-custom-title">Custom Synthesis</div>
             <div id="custom-menu-container"></div>
         </div>
 
@@ -540,6 +548,7 @@
                     <div class="routing-opt" data-mode="Think">Think</div>
                     <div class="routing-opt" data-mode="Fast">Fast</div>
                     <div class="routing-opt" data-mode="Custom">Custom</div>
+                    <div class="routing-opt" data-mode="Vision">Vision</div>
                 </div>
                 
                 <div class="model-picker-container" id="fast-picker" style="display: none;">
@@ -604,41 +613,60 @@
                 "DeepSeek V4 Flash", "Nemotron Lightning", "Minimax M3", "GPT-OSS 120B", "Gemini 3.6 Flash"
             ]
         };
+        const VISION_MODELS = [
+            "Muse Glimmer 30B", "Qwen 3.8 Max", "Kimi K3", "Kimi K2.7 Code", "Inkling", "Qwen 3.7 Plus"
+        ];
 
         const customMenuContainer = document.getElementById('custom-menu-container');
+
+        function getModelApiId(name) {
+            if (name === "Gemini 3.6 Flash") return "gemini-3.6-flash";
+            if (name === "DeepSeek V4 Pro") return "fw-deepseek-v4-pro";
+            if (name === "Qwen 3.8 Max") return "fw-qwen3p8-max";
+            if (name === "Kimi K3") return "fw-kimi-k3";
+            if (name === "Muse Glimmer 30B") return "fw-muse-glimmer";
+            if (name === "GLM 5.2") return "fw-glm-5p2";
+            if (name === "Kimi K2.7 Code") return "fw-kimi-k2p7-code";
+            if (name === "Nemotron 3 Ultra") return "fw-nemotron-ultra";
+            if (name === "Inkling") return "fw-inkling";
+            if (name === "Qwen 3.7 Plus") return "fw-qwen3p7-plus";
+            if (name === "DeepSeek V4 Flash") return "fw-deepseek-v4-flash";
+            if (name === "Nemotron Lightning") return "fw-nemotron-light";
+            if (name === "Minimax M3") return "fw-minimax-m3";
+            if (name === "GPT-OSS 120B") return "fw-gpt-oss-120b";
+            return "";
+        }
         
-        Object.entries(MODEL_TIERS).forEach(([tierName, models]) => {
-            let groupHtml = `<div class="tier-group"><div class="tier-label">${tierName}</div>`;
-            
-            models.forEach(name => {
-                const id = "custom-model-" + name.replace(/\s+/g, '-');
-                let apiId = "";
-                if (name === "Gemini 3.6 Flash") apiId = "gemini-3.6-flash";
-                else if (name === "DeepSeek V4 Pro") apiId = "fw-deepseek-v4-pro";
-                else if (name === "Qwen 3.8 Max") apiId = "fw-qwen3p8-max";
-                else if (name === "Kimi K3") apiId = "fw-kimi-k3";
-                else if (name === "Muse Glimmer 30B") apiId = "fw-muse-glimmer";
-                else if (name === "GLM 5.2") apiId = "fw-glm-5p2";
-                else if (name === "Kimi K2.7 Code") apiId = "fw-kimi-k2p7-code";
-                else if (name === "Nemotron 3 Ultra") apiId = "fw-nemotron-ultra";
-                else if (name === "Inkling") apiId = "fw-inkling";
-                else if (name === "Qwen 3.7 Plus") apiId = "fw-qwen3p7-plus";
-                else if (name === "DeepSeek V4 Flash") apiId = "fw-deepseek-v4-flash";
-                else if (name === "Nemotron Lightning") apiId = "fw-nemotron-light";
-                else if (name === "Minimax M3") apiId = "fw-minimax-m3";
-                else if (name === "GPT-OSS 120B") apiId = "fw-gpt-oss-120b";
-                
-                groupHtml += `
-                    <label class="custom-menu-item" for="${id}">
-                        <input type="checkbox" id="${id}" value="${apiId}" class="custom-model-cb">
-                        <div class="badge-dot" style="background:${MODEL_HUES[name]}"></div>
-                        ${name}
-                    </label>
-                `;
-            });
-            groupHtml += `</div>`;
-            customMenuContainer.insertAdjacentHTML('beforeend', groupHtml);
-        });
+        function renderCheckbox(name) {
+            const id = "custom-model-" + name.replace(/\s+/g, '-');
+            const apiId = getModelApiId(name);
+            return `
+                <label class="custom-menu-item" for="${id}">
+                    <input type="checkbox" id="${id}" value="${apiId}" class="custom-model-cb">
+                    <div class="badge-dot" style="background:${MODEL_HUES[name]}"></div>
+                    ${name}
+                </label>
+            `;
+        }
+
+        function renderSidebarModels(mode) {
+            customMenuContainer.innerHTML = '';
+            if (mode === 'Custom') {
+                document.getElementById('sidebar-custom-title').innerText = 'CUSTOM SYNTHESIS';
+                Object.entries(MODEL_TIERS).forEach(([tierName, models]) => {
+                    let groupHtml = `<div class="tier-group"><div class="tier-label">${tierName}</div>`;
+                    models.forEach(name => groupHtml += renderCheckbox(name));
+                    groupHtml += `</div>`;
+                    customMenuContainer.insertAdjacentHTML('beforeend', groupHtml);
+                });
+            } else if (mode === 'Vision') {
+                document.getElementById('sidebar-custom-title').innerText = 'IMAGE GENERATION';
+                let groupHtml = `<div class="tier-group">`;
+                VISION_MODELS.forEach(name => groupHtml += renderCheckbox(name));
+                groupHtml += `</div>`;
+                customMenuContainer.insertAdjacentHTML('beforeend', groupHtml);
+            }
+        }
 
         // Setup routing toggle
         document.querySelectorAll('.routing-opt').forEach(opt => {
@@ -648,7 +676,13 @@
                 currentMode = e.target.getAttribute('data-mode');
                 
                 document.getElementById('fast-picker').style.display = currentMode === 'Fast' ? 'block' : 'none';
-                document.getElementById('sidebar-custom-picker').style.display = currentMode === 'Custom' ? 'block' : 'none';
+                
+                if (currentMode === 'Custom' || currentMode === 'Vision') {
+                    document.getElementById('sidebar-custom-picker').style.display = 'block';
+                    renderSidebarModels(currentMode);
+                } else {
+                    document.getElementById('sidebar-custom-picker').style.display = 'none';
+                }
             });
         });
 
@@ -793,10 +827,15 @@
                 ];
             } else if (currentMode === 'Fast') {
                 selectedModels = [document.getElementById('fast-model-select').value];
-            } else if (currentMode === 'Custom') {
+            } else if (currentMode === 'Custom' || currentMode === 'Vision') {
                 document.querySelectorAll('.custom-model-cb:checked').forEach(cb => {
                     selectedModels.push(cb.value);
                 });
+            }
+
+            let finalPrompt = text;
+            if (currentMode === 'Vision') {
+                finalPrompt = text + "\n\n[SYSTEM INSTRUCTION: The user wants to generate an image. You MUST reply with exactly this markdown format: `![Description of image](https://image.pollinations.ai/prompt/URL_ENCODED_DETAILED_PROMPT)`. Make the prompt incredibly detailed based on the user's request. URL-encode it, and place it in the URL. DO NOT output any other text or commentary.]";
             }
 
             try {
@@ -804,7 +843,7 @@
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        prompt: text,
+                        prompt: finalPrompt,
                         auto_route: currentMode === 'Auto',
                         manual_models: selectedModels
                     })
