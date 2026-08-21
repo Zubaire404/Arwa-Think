@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
@@ -20,6 +22,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files for the custom HTML frontend
+frontend_dir = Path(__file__).parent / "public"
+frontend_dir.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory="public"), name="static")
+
+@app.get("/")
+async def serve_frontend():
+    index_path = frontend_dir / "index.html"
+    if not index_path.exists():
+        return {"error": "Frontend not built yet. Create public/index.html"}
+    return FileResponse(index_path)
 
 # Initialize Clients
 gemini_key = os.getenv("GEMINI_API_KEY", "missing")

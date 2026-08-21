@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arwa Think</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Include Markdown parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --void: #07070c;
+            --deep-current: #0f0d1c;
+            --ash: #1c1a2b;
+            --mist: #e7e5ef;
+            --fog: #7d7a94;
+            --signal-gold: #e8c468;
+            
+            --hue-violet: #9b7ede;
+            --hue-cyan: #5eb8c9;
+            --hue-coral: #ef8354;
+            --hue-rose: #e37fa0;
+            --hue-sage: #8fbf8a;
+            --hue-amber: #e0b04f;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--void);
+            color: var(--mist);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Noise Grain */
+        body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 9999;
+            mix-blend-mode: overlay;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: rgba(15, 13, 28, 0.78);
+            backdrop-filter: blur(24px) saturate(140%);
+            border-right: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+        }
+
+        .brand-area {
+            padding: 1.5rem 1rem 1rem;
+        }
+        .brand-title {
+            font-family: 'Fraunces', serif;
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: var(--signal-gold);
+            letter-spacing: -0.5px;
+        }
+        .brand-subtitle {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.6rem;
+            color: var(--fog);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 2px;
+        }
+
+        .new-chat-btn {
+            margin: 0 1rem;
+            padding: 0.6rem;
+            background: var(--ash);
+            color: var(--mist);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .new-chat-btn:hover {
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(255,255,255,0.15);
+        }
+
+        .history-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 0;
+        }
+        .history-item {
+            padding: 0.6rem 1rem;
+            color: var(--fog);
+            font-size: 0.85rem;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin: 0.2rem 0.5rem;
+            border-radius: 6px;
+        }
+        .history-item:hover, .history-item.active {
+            background: rgba(255,255,255,0.04);
+            color: var(--mist);
+        }
+
+        /* Main Chat Area */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* Top Routing Bar */
+        .routing-bar {
+            padding: 1rem;
+            display: flex;
+            justify-content: center;
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            z-index: 5;
+        }
+        .routing-pill {
+            display: flex;
+            background: var(--ash);
+            border-radius: 10px;
+            padding: 4px;
+            gap: 4px;
+        }
+        .routing-opt {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--fog);
+            padding: 6px 18px;
+            border-radius: 7px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .routing-opt.active {
+            background: var(--deep-current);
+            color: var(--mist);
+            font-weight: 600;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+        }
+
+        /* Chat Scroll Area */
+        .chat-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4rem 2rem 8rem 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            scroll-behavior: smooth;
+        }
+        
+        .chat-container {
+            width: 100%;
+            max-width: 760px;
+        }
+
+        /* Welcome Screen */
+        .welcome-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            position: relative;
+        }
+        .constellation {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        .node {
+            position: absolute;
+            border-radius: 50%;
+            opacity: 0.06;
+            filter: blur(2px);
+            animation: drift var(--dur) ease-in-out infinite alternate;
+        }
+        @keyframes drift {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(var(--dx), var(--dy)) scale(1.1); }
+        }
+
+        .welcome-title {
+            font-family: 'Fraunces', serif;
+            font-size: 2.6rem;
+            margin-bottom: 0.5rem;
+            z-index: 2;
+        }
+        .welcome-sub {
+            color: var(--fog);
+            margin-bottom: 2.5rem;
+            z-index: 2;
+        }
+        .prompt-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            z-index: 2;
+        }
+        .prompt-card {
+            background: var(--deep-current);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-top: 2px solid var(--card-hue);
+            border-radius: 10px;
+            padding: 1rem;
+            font-size: 0.85rem;
+            color: var(--fog);
+            text-align: left;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .prompt-card:hover {
+            background: var(--ash);
+            color: var(--mist);
+        }
+
+        /* Messages */
+        .message {
+            margin-bottom: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .message.user {
+            align-items: flex-end;
+        }
+        .message-bubble {
+            padding: 1rem 1.2rem;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            max-width: 100%;
+        }
+        .message.user .message-bubble {
+            background: var(--ash);
+            border-radius: 16px;
+            max-width: 80%;
+        }
+        
+        .message.assistant .message-bubble {
+            position: relative;
+            padding-left: 20px;
+        }
+        .message.assistant .spine {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            border-radius: 2px;
+            background: var(--spine-gradient);
+        }
+        
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 12px;
+            margin-left: 20px;
+        }
+        .badge-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+        }
+        .badge-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 500;
+            color: var(--fog);
+        }
+
+        /* Markdown Styles inside Messages */
+        .message-bubble p { margin-bottom: 1rem; }
+        .message-bubble p:last-child { margin-bottom: 0; }
+        .message-bubble pre { 
+            background: #12101b; 
+            padding: 1rem; 
+            border-radius: 8px; 
+            overflow-x: auto;
+            margin-bottom: 1rem;
+        }
+        .message-bubble code { 
+            font-family: 'JetBrains Mono', monospace; 
+            font-size: 0.85em; 
+            background: #12101b; 
+            padding: 0.2rem 0.4rem; 
+            border-radius: 4px;
+        }
+        .message-bubble pre code { padding: 0; background: transparent; }
+
+        /* Drafts Expander */
+        .drafts-container {
+            margin-left: 20px;
+            margin-top: 1rem;
+            width: 100%;
+        }
+        .drafts-toggle {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--fog);
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .drafts-toggle:hover { color: var(--mist); }
+        .drafts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+            display: none;
+        }
+        .drafts-grid.open { display: grid; }
+        .draft-card {
+            background: var(--deep-current);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-top: 3px solid var(--hue);
+            border-radius: 8px;
+            padding: 1rem;
+            font-size: 0.8rem;
+            color: var(--fog);
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .draft-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--mist);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Fixed Input Box */
+        .input-area {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            padding: 0 2rem 2rem 2rem;
+            display: flex;
+            justify-content: center;
+            pointer-events: none; /* Let clicks pass through empty space */
+        }
+        .input-box {
+            width: 100%;
+            max-width: 760px;
+            background: rgba(28, 26, 43, 0.7);
+            backdrop-filter: blur(16px) saturate(120%);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            display: flex;
+            align-items: flex-end;
+            padding: 8px 12px;
+            pointer-events: auto; /* Re-enable clicks for the box itself */
+            transition: 0.2s;
+        }
+        .input-box:focus-within {
+            border-color: rgba(232, 196, 104, 0.4);
+            box-shadow: 0 0 0 2px rgba(232, 196, 104, 0.15);
+        }
+        .input-box textarea {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--mist);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.95rem;
+            resize: none;
+            padding: 12px;
+            max-height: 200px;
+            outline: none;
+        }
+        .input-box textarea::placeholder {
+            color: var(--fog);
+        }
+        .send-btn {
+            background: var(--mist);
+            color: var(--void);
+            border: none;
+            border-radius: 10px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            margin-bottom: 6px;
+            margin-right: 4px;
+        }
+        .send-btn:disabled {
+            background: var(--fog);
+            cursor: not-allowed;
+        }
+
+        /* Gathering Animation */
+        .gathering {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 0 12px 20px;
+        }
+        .gather-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            animation: gather 1.6s ease-in-out infinite;
+            animation-delay: var(--delay);
+        }
+        @keyframes gather {
+            0% { transform: translateX(var(--offset)) scale(0.7); opacity: 0.3; }
+            50% { transform: translateX(0) scale(1); opacity: 1; }
+            100% { transform: translateX(var(--offset)) scale(0.7); opacity: 0.3; }
+        }
+        .gather-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--fog);
+            animation: gather-text 1.6s ease-in-out infinite;
+        }
+        @keyframes gather-text {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+        
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="brand-area">
+            <div class="brand-title">Arwa Think</div>
+            <div class="brand-subtitle">Multi-model convergence</div>
+        </div>
+        <button class="new-chat-btn" onclick="startNewChat()">+ New conversation</button>
+        <div class="history-list" id="history-list">
+            <!-- History populated by JS -->
+        </div>
+    </div>
+
+    <div class="main-content">
+        <!-- Routing Bar -->
+        <div class="routing-bar">
+            <div class="routing-pill" id="routing-options">
+                <div class="routing-opt active" data-mode="Auto">Auto</div>
+                <div class="routing-opt" data-mode="Think">Think</div>
+                <div class="routing-opt" data-mode="Fast">Fast</div>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-scroll" id="chat-scroll">
+            <div class="chat-container" id="chat-container">
+                <!-- Welcome Screen injected by default -->
+            </div>
+        </div>
+
+        <!-- Fixed Input -->
+        <div class="input-area">
+            <div class="input-box">
+                <textarea id="prompt-input" rows="1" placeholder="Message Arwa Think..." oninput="autoResize(this)" onkeydown="handleEnter(event)"></textarea>
+                <button class="send-btn" id="send-btn" onclick="sendMessage()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const MODEL_HUES = {
+            "DeepSeek V4 Pro":    "var(--hue-violet)",
+            "Qwen 3.8 Max":       "var(--hue-cyan)",
+            "Kimi K3":            "var(--hue-rose)",
+            "Muse Glimmer 30B":   "var(--hue-amber)",
+            "GLM 5.2":            "var(--hue-sage)",
+            "Kimi K2.7 Code":     "var(--hue-violet)",
+            "Nemotron 3 Ultra":   "var(--hue-coral)",
+            "Inkling":            "var(--hue-sage)",
+            "Qwen 3.7 Plus":      "var(--hue-cyan)",
+            "DeepSeek V4 Flash":  "var(--hue-coral)",
+            "Nemotron Lightning": "var(--hue-coral)",
+            "Minimax M3":         "var(--hue-amber)",
+            "GPT-OSS 120B":       "var(--hue-sage)",
+            "Gemini 3.6 Flash":   "var(--hue-cyan)"
+        };
+
+        let currentMode = "Auto";
+        
+        // Setup routing toggle
+        document.querySelectorAll('.routing-opt').forEach(opt => {
+            opt.addEventListener('click', (e) => {
+                document.querySelectorAll('.routing-opt').forEach(el => el.classList.remove('active'));
+                e.target.classList.add('active');
+                currentMode = e.target.getAttribute('data-mode');
+            });
+        });
+
+        // Input resize
+        function autoResize(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = (textarea.scrollHeight < 200 ? textarea.scrollHeight : 200) + 'px';
+        }
+
+        function handleEnter(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+
+        const chatContainer = document.getElementById('chat-container');
+        const chatScroll = document.getElementById('chat-scroll');
+        const inputEl = document.getElementById('prompt-input');
+
+        function renderWelcome() {
+            chatContainer.innerHTML = `
+                <div class="welcome-screen">
+                    <div class="constellation">
+                        <div class="node" style="width:120px;height:120px;background:var(--hue-violet);top:10%;left:20%;--dur:20s;--dx:20px;--dy:30px;"></div>
+                        <div class="node" style="width:80px;height:80px;background:var(--hue-cyan);top:30%;right:15%;--dur:15s;--dx:-20px;--dy:-20px;"></div>
+                        <div class="node" style="width:140px;height:140px;background:var(--hue-coral);bottom:10%;left:40%;--dur:25s;--dx:30px;--dy:-10px;"></div>
+                        <div class="node" style="width:90px;height:90px;background:var(--hue-amber);bottom:40%;left:10%;--dur:18s;--dx:-15px;--dy:20px;"></div>
+                    </div>
+                    <div class="welcome-title">What can I help with?</div>
+                    <div class="welcome-sub">Several minds, one voice. Select a mode and ask anything.</div>
+                    <div class="prompt-grid">
+                        <div class="prompt-card" style="--card-hue:var(--hue-violet)" onclick="fillPrompt('Explain how transformers work')">Explain how transformers work in deep learning</div>
+                        <div class="prompt-card" style="--card-hue:var(--hue-cyan)" onclick="fillPrompt('Write a Python merge sort')">Write a Python function to merge two sorted lists</div>
+                        <div class="prompt-card" style="--card-hue:var(--hue-coral)" onclick="fillPrompt('Compare REST vs GraphQL')">Compare REST vs GraphQL for a new project</div>
+                        <div class="prompt-card" style="--card-hue:var(--hue-amber)" onclick="fillPrompt('Key events in AI 2025')">What are the key events of 2025 in AI?</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function fillPrompt(txt) {
+            inputEl.value = txt;
+            inputEl.focus();
+        }
+
+        function startNewChat() {
+            chatContainer.innerHTML = '';
+            renderWelcome();
+        }
+
+        function toggleDrafts(btn) {
+            const grid = btn.nextElementSibling;
+            grid.classList.toggle('open');
+            btn.innerHTML = grid.classList.contains('open') ? '▼ Hide individual AI drafts' : '▶ View individual AI drafts';
+        }
+
+        async function sendMessage() {
+            const text = inputEl.value.trim();
+            if(!text) return;
+            
+            // Remove welcome screen if present
+            if(chatContainer.querySelector('.welcome-screen')) {
+                chatContainer.innerHTML = '';
+            }
+
+            // Render User Message
+            const userHtml = `
+                <div class="message user">
+                    <div class="message-bubble">${text}</div>
+                </div>
+            `;
+            chatContainer.insertAdjacentHTML('beforeend', userHtml);
+            inputEl.value = '';
+            inputEl.style.height = 'auto';
+            
+            // Render Gathering State
+            const gatherId = 'gather-' + Date.now();
+            const gatherHtml = `
+                <div class="message assistant" id="${gatherId}">
+                    <div class="gathering">
+                        <div class="gather-dot" style="background:var(--hue-violet); --delay:0s; --offset:-20px;"></div>
+                        <div class="gather-dot" style="background:var(--hue-cyan); --delay:0.2s; --offset:0px;"></div>
+                        <div class="gather-dot" style="background:var(--hue-coral); --delay:0.4s; --offset:20px;"></div>
+                        <div class="gather-label">Gathering</div>
+                    </div>
+                </div>
+            `;
+            chatContainer.insertAdjacentHTML('beforeend', gatherHtml);
+            chatScroll.scrollTop = chatScroll.scrollHeight;
+
+            document.getElementById('send-btn').disabled = true;
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        prompt: text,
+                        auto_route: currentMode === 'Auto',
+                        manual_models: currentMode === 'Think' ? [
+                            "accounts/fireworks/models/deepseek-v4-pro-0813",
+                            "accounts/fireworks/models/qwen3p8-max",
+                            "accounts/fireworks/models/kimi-k3",
+                            "accounts/fireworks/models/muse-glimmer-30b"
+                        ] : (currentMode === 'Fast' ? ["gemini-3.6-flash"] : [])
+                    })
+                });
+
+                const data = await response.json();
+                document.getElementById(gatherId).remove();
+
+                if(!response.ok) throw new Error(data.detail || 'Server error');
+
+                // Compute Hues
+                const hues = data.models_used.map(m => MODEL_HUES[m] || 'var(--fog)');
+                let gradient = hues.length === 1 ? hues[0] : `linear-gradient(to bottom, ${hues.join(', ')})`;
+                
+                let dotsHtml = hues.map(h => `<div class="badge-dot" style="background:${h}"></div>`).join('');
+                let badgeLabel = hues.length > 1 ? `Synthesized from ${hues.length} models` : data.models_used[0];
+
+                let draftsHtml = '';
+                if(data.drafts && data.drafts.length > 1) {
+                    let cards = data.drafts.map(d => {
+                        let h = MODEL_HUES[d.label] || 'var(--fog)';
+                        return `
+                            <div class="draft-card" style="--hue:${h}">
+                                <div class="draft-title"><div class="badge-dot" style="background:${h}"></div>${d.label}</div>
+                                <div>${marked.parse(d.text)}</div>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    draftsHtml = `
+                        <div class="drafts-container">
+                            <div class="drafts-toggle" onclick="toggleDrafts(this)">▶ View individual AI drafts</div>
+                            <div class="drafts-grid">${cards}</div>
+                        </div>
+                    `;
+                }
+
+                const ansHtml = `
+                    <div class="message assistant">
+                        <div class="badge">${dotsHtml}<span class="badge-text">${badgeLabel}</span></div>
+                        <div class="spine" style="--spine-gradient:${gradient}"></div>
+                        <div class="message-bubble">${marked.parse(data.final_answer)}</div>
+                        ${draftsHtml}
+                    </div>
+                `;
+                
+                chatContainer.insertAdjacentHTML('beforeend', ansHtml);
+
+            } catch (err) {
+                document.getElementById(gatherId).remove();
+                chatContainer.insertAdjacentHTML('beforeend', `
+                    <div class="message assistant">
+                        <div class="message-bubble" style="color:#ef8354">Error: ${err.message}</div>
+                    </div>
+                `);
+            }
+
+            document.getElementById('send-btn').disabled = false;
+            chatScroll.scrollTop = chatScroll.scrollHeight;
+        }
+
+        // Init
+        renderWelcome();
+    </script>
+</body>
+</html>
