@@ -444,28 +444,55 @@
             background: rgba(28, 26, 43, 0.7);
             backdrop-filter: blur(16px) saturate(120%);
             border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 16px;
+            background: rgba(28,26,43,0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 0;
             display: flex;
-            align-items: flex-end;
-            padding: 8px 12px;
-            pointer-events: auto; /* Re-enable clicks for the box itself */
-            transition: 0.2s;
+            flex-direction: column;
+            pointer-events: auto;
+            max-width: 900px;
+            margin: 0 auto;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
         }
         .input-box:focus-within {
-            border-color: rgba(232, 196, 104, 0.4);
-            box-shadow: 0 0 0 2px rgba(232, 196, 104, 0.15);
+            border-color: var(--gold);
+            box-shadow: 0 0 0 1px var(--gold), 0 8px 32px rgba(0,0,0,0.4);
         }
-        .input-box textarea {
+        .attach-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            margin-bottom: 0.3rem;
+            margin-left: 0.5rem;
+            background: rgba(255,255,255,0.05);
+            border-radius: 50%;
+            color: var(--fog);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .attach-btn:hover {
+            background: rgba(255,255,255,0.1);
+            color: var(--mist);
+        }
+        #prompt-input {
             flex: 1;
             background: transparent;
             border: none;
             color: var(--mist);
             font-family: 'Inter', sans-serif;
-            font-size: 0.95rem;
+            font-size: 1rem;
             resize: none;
-            padding: 12px;
-            max-height: 200px;
             outline: none;
+            padding: 1rem;
+            max-height: 200px;
+            line-height: 1.5;
         }
         .input-box textarea::placeholder {
             color: var(--fog);
@@ -573,10 +600,19 @@
         <!-- Fixed Input -->
         <div class="input-area">
             <div class="input-box">
-                <textarea id="prompt-input" rows="1" placeholder="Message Arwa Think..." oninput="autoResize(this)" onkeydown="handleEnter(event)"></textarea>
-                <button class="send-btn" id="send-btn" onclick="sendMessage()">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
-                </button>
+                <div id="file-preview" style="display: none; padding: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); gap: 0.5rem; align-items: center;">
+                    <img id="preview-img" style="max-height: 40px; border-radius: 4px; display: none;">
+                    <span id="preview-name" style="font-size: 0.8rem; color: var(--fog);"></span>
+                    <button id="clear-file-btn" style="background: none; border: none; color: #ef8354; cursor: pointer; font-weight: bold; margin-left: auto;">✕</button>
+                </div>
+                <div style="display: flex; align-items: flex-end; width: 100%;">
+                    <label for="file-upload" class="attach-btn">+</label>
+                    <input type="file" id="file-upload" accept="image/*,.pdf,.txt" style="display: none;">
+                    <textarea id="prompt-input" placeholder="Message Arwa Think..." rows="1" oninput="autoResize(this)" onkeydown="handleEnter(event)"></textarea>
+                    <button class="send-btn" id="send-btn" onclick="sendMessage()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -618,6 +654,39 @@
         const VISION_MODELS = [
             "Muse Glimmer 30B", "Qwen 3.8 Max", "Kimi K3", "Kimi K2.7 Code", "Inkling", "Qwen 3.7 Plus"
         ];
+
+        let attachedFile = null;
+
+        document.getElementById('file-upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const result = evt.target.result;
+                const parts = result.split(',');
+                const mime = parts[0].match(/:(.*?);/)[1];
+                const data = parts[1];
+                
+                attachedFile = { data: data, mime: mime, name: file.name };
+                
+                document.getElementById('file-preview').style.display = 'flex';
+                document.getElementById('preview-name').innerText = file.name;
+                if (mime.startsWith('image/')) {
+                    document.getElementById('preview-img').src = result;
+                    document.getElementById('preview-img').style.display = 'block';
+                } else {
+                    document.getElementById('preview-img').style.display = 'none';
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+
+        document.getElementById('clear-file-btn').addEventListener('click', function() {
+            attachedFile = null;
+            document.getElementById('file-preview').style.display = 'none';
+            document.getElementById('file-upload').value = '';
+        });
 
         const customMenuContainer = document.getElementById('custom-menu-container');
 
@@ -784,40 +853,6 @@
                 renderHistory();
             }
 
-            // Render User Message
-            const userHtml = `
-                <div class="message user">
-                    <div class="message-bubble">${text}</div>
-                </div>
-            `;
-            chatContainer.insertAdjacentHTML('beforeend', userHtml);
-            
-            const chat = conversations.find(c => c.id === currentChatId);
-            if(chat) {
-                chat.html = chatContainer.innerHTML;
-                localStorage.setItem('arwa_conversations', JSON.stringify(conversations));
-            }
-
-            inputEl.value = '';
-            inputEl.style.height = 'auto';
-            
-            // Render Gathering State
-            const gatherId = 'gather-' + Date.now();
-            const gatherHtml = `
-                <div class="message assistant" id="${gatherId}">
-                    <div class="gathering">
-                        <div class="gather-dot" style="background:var(--hue-violet); --delay:0s; --offset:-20px;"></div>
-                        <div class="gather-dot" style="background:var(--hue-cyan); --delay:0.2s; --offset:0px;"></div>
-                        <div class="gather-dot" style="background:var(--hue-coral); --delay:0.4s; --offset:20px;"></div>
-                        <div class="gather-label">Gathering</div>
-                    </div>
-                </div>
-            `;
-            chatContainer.insertAdjacentHTML('beforeend', gatherHtml);
-            chatScroll.scrollTop = chatScroll.scrollHeight;
-
-            document.getElementById('send-btn').disabled = true;
-
             // Get Manual Models
             let selectedModels = [];
             if (currentMode === 'Think') {
@@ -840,15 +875,60 @@
                 finalPrompt = text + "\n\n[SYSTEM INSTRUCTION: The user wants to generate an image. You MUST reply with exactly this markdown format: `![Description of image](https://image.pollinations.ai/prompt/URL_ENCODED_DETAILED_PROMPT)`. Make the prompt incredibly detailed based on the user's request. URL-encode it, and place it in the URL. DO NOT output any other text or commentary.]";
             }
 
+            // Render User Message
+            let attachmentHtml = '';
+            if (attachedFile) {
+                attachmentHtml = `<div style="font-size: 0.8rem; opacity: 0.7; margin-bottom: 0.3rem;">📎 ${attachedFile.name}</div>`;
+            }
+            
+            const userHtml = `
+                <div class="message user">
+                    <div class="message-bubble">${attachmentHtml}${text}</div>
+                </div>
+            `;
+            chatContainer.insertAdjacentHTML('beforeend', userHtml);
+            
+            const chat = conversations.find(c => c.id === currentChatId);
+            if(chat) {
+                chat.html = chatContainer.innerHTML;
+                localStorage.setItem('arwa_conversations', JSON.stringify(conversations));
+            }
+
+            inputEl.value = '';
+            inputEl.style.height = 'auto';
+            
+            const reqPayload = {
+                prompt: finalPrompt,
+                auto_route: currentMode === 'Auto',
+                manual_models: selectedModels,
+                file_data: attachedFile ? attachedFile.data : null,
+                file_mime: attachedFile ? attachedFile.mime : null
+            };
+            
+            document.getElementById('clear-file-btn').click(); // clear UI and variable
+            
+            // Render Gathering State
+            const gatherId = 'gather-' + Date.now();
+            const gatherHtml = `
+                <div class="message assistant" id="${gatherId}">
+                    <div class="gathering">
+                        <div class="gather-dot" style="background:var(--hue-violet); --delay:0s; --offset:-20px;"></div>
+                        <div class="gather-dot" style="background:var(--hue-cyan); --delay:0.2s; --offset:0px;"></div>
+                        <div class="gather-dot" style="background:var(--hue-coral); --delay:0.4s; --offset:20px;"></div>
+                        <div class="gather-label">Gathering</div>
+                    </div>
+                </div>
+            `;
+            chatContainer.insertAdjacentHTML('beforeend', gatherHtml);
+            chatScroll.scrollTop = chatScroll.scrollHeight;
+
+            document.getElementById('send-btn').disabled = true;
+
             try {
                 const response = await fetch('/chat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        prompt: finalPrompt,
-                        auto_route: currentMode === 'Auto',
-                        manual_models: selectedModels
-                    })
+                    body: JSON.stringify(reqPayload)
                 });
 
                 if(!response.ok) throw new Error('Server error');

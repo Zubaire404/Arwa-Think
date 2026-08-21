@@ -80,6 +80,8 @@ class ChatRequest(BaseModel):
     prompt: str
     auto_route: bool
     manual_models: list[str] = []
+    file_data: str | None = None
+    file_mime: str | None = None
 
 class Draft(BaseModel):
     label: str
@@ -126,12 +128,30 @@ async def analyze_and_route(prompt: str) -> tuple[list[str], str]:
         return AUTO_ROUTE_MODELS["Fact"], "Fallback"
 
 
-async def fetch_draft(client: AsyncOpenAI, api_id: str, prompt: str, label: str) -> dict:
+def build_messages(prompt: str, file_data: str = None, file_mime: str = None):
+    if not file_data:
+        return [{"role": "user", "content": prompt}]
+    return [{
+        "role": "user",
+        "content": [
+            {"type": "text", "text": prompt},
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{file_mime};base64,{file_data}"
+                }
+            }
+        ]
+    }]
+
+
+async def fetch_draft(client: AsyncOpenAI, api_id: str, prompt: str, label: str, file_data: str = None, file_mime: str = None) -> dict:
     try:
+        msgs = build_messages(prompt, file_data, file_mime)
         res = await asyncio.wait_for(
             client.chat.completions.create(
                 model=api_id,
-                messages=[{"role": "user", "content": prompt}]
+                messages=msgs
             ), timeout=45.0
         )
         text = res.choices[0].message.content or ""
@@ -146,7 +166,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 import json
 import asyncio
 
-async def stream_single_model(client, model_id, prompt, label):
+async def stream_single_model(client, model_id, prompt, label, file_data=None, file_mime=None):
     meta = {
         "type": "metadata",
         "models_used": [label],
@@ -156,9 +176,10 @@ async def stream_single_model(client, model_id, prompt, label):
     yield f"data: {json.dumps(meta)}\n\n"
     
     try:
+        msgs = build_messages(prompt, file_data, file_mime)
         response = await client.chat.completions.create(
             model=model_id,
-            messages=[{"role": "user", "content": prompt}],
+            messages=msgs,
             stream=True
         )
         async for chunk in response:
@@ -203,7 +224,7 @@ async def chat_endpoint(request: ChatRequest):
         if info:
             client = CLIENT_MAP[info["client"]]
             return StreamingResponse(
-                stream_single_model(client, info["api_id"], user_prompt, info["label"]),
+                stream_single_model(client, info["api_id"], user_prompt, info["label"], request.file_data, request.file_mime),
                 media_type="text/event-stream"
             )
     
@@ -214,7 +235,7 @@ async def chat_endpoint(request: ChatRequest):
             info = MODEL_REGISTRY.get(key)
             if info:
                 client = CLIENT_MAP[info["client"]]
-                tasks.append(fetch_draft(client, info["api_id"], user_prompt, info["label"]))
+                tasks.append(fetch_draft(client, info["api_id"], user_prompt, info["label"], request.file_data, request.file_mime))
 
         drafts = await asyncio.gather(*tasks)
         valid_drafts = [d for d in drafts if d.get("success")]
