@@ -139,7 +139,35 @@ async def fetch_draft(client: AsyncOpenAI, api_id: str, prompt: str, label: str)
         return {"success": False, "label": label, "text": ""}
 
 
-@app.post("/chat", response_model=ChatResponse)
+from fastapi.responses import FileResponse, StreamingResponse
+import json
+import asyncio
+
+async def stream_single_model(client, model_id, prompt, label):
+    meta = {
+        "type": "metadata",
+        "models_used": [label],
+        "category": "Direct",
+        "drafts": []
+    }
+    yield f"data: {json.dumps(meta)}\n\n"
+    
+    try:
+        response = await client.chat.completions.create(
+            model=model_id,
+            messages=[{"role": "user", "content": prompt}],
+            stream=True
+        )
+        async for chunk in response:
+            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                yield f"data: {json.dumps({'type': 'chunk', 'text': chunk.choices[0].delta.content})}\n\n"
+    except Exception as e:
+        yield f"data: {json.dumps({'type': 'error', 'text': str(e)})}\n\n"
+    
+    yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+
+@app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     user_prompt = request.prompt
 
@@ -151,60 +179,65 @@ async def chat_endpoint(request: ChatRequest):
 
     print(f"[Chat] Models: {selected_keys}")
 
-    tasks = []
-    for key in selected_keys:
-        info = MODEL_REGISTRY.get(key)
-        if not info:
-            print(f"[Skip] Unknown model key: {key}")
-            continue
-        client = CLIENT_MAP[info["client"]]
-        tasks.append(fetch_draft(client, info["api_id"], user_prompt, info["label"]))
-
-    if not tasks:
+    if not selected_keys:
         raise HTTPException(status_code=400, detail="No valid models selected.")
 
-    drafts = await asyncio.gather(*tasks)
-    valid_drafts = [d for d in drafts if d.get("success")]
-    models_used = [d["label"] for d in valid_drafts]
+    # Single Model - stream directly without gathering!
+    if len(selected_keys) == 1:
+        info = MODEL_REGISTRY.get(selected_keys[0])
+        if info:
+            client = CLIENT_MAP[info["client"]]
+            return StreamingResponse(
+                stream_single_model(client, info["api_id"], user_prompt, info["label"]),
+                media_type="text/event-stream"
+            )
+    
+    # Multiple Models - gather drafts concurrently, then stream synthesis
+    async def synthesize_stream():
+        tasks = []
+        for key in selected_keys:
+            info = MODEL_REGISTRY.get(key)
+            if info:
+                client = CLIENT_MAP[info["client"]]
+                tasks.append(fetch_draft(client, info["api_id"], user_prompt, info["label"]))
 
-    if not valid_drafts:
-        print("[CRITICAL] All models failed.")
-        raise HTTPException(status_code=503, detail="All AI models failed to respond. Please try different models.")
+        drafts = await asyncio.gather(*tasks)
+        valid_drafts = [d for d in drafts if d.get("success")]
+        models_used = [d["label"] for d in valid_drafts]
 
-    # If only 1 draft, return it directly (no synthesis needed)
-    if len(valid_drafts) == 1:
-        return ChatResponse(
-            final_answer=valid_drafts[0]["text"],
-            models_used=models_used,
-            category=category,
-            drafts=valid_drafts
-        )
+        if not valid_drafts:
+            yield f"data: {json.dumps({'type': 'error', 'text': 'All AI models failed to respond.'})}\n\n"
+            return
+            
+        meta = {
+            "type": "metadata",
+            "models_used": models_used,
+            "category": category,
+            "drafts": valid_drafts
+        }
+        # Yield metadata immediately once drafts are ready
+        yield f"data: {json.dumps(meta)}\n\n"
+        
+        context = "\n\n---\n\n".join([f"**{d['label']}:**\n{d['text']}" for d in valid_drafts])
+        judge_sys = "You are Arwa Think, an expert synthesizer. Combine the following AI draft responses into one best, accurate, complete answer. Do not mention the drafts or models."
 
-    # Synthesize multiple drafts using Gemini as judge
-    print("[Synth] Synthesizing with Gemini...")
-    context = "\n\n---\n\n".join([f"**{d['label']}:**\n{d['text']}" for d in valid_drafts])
-    judge_sys = "You are Arwa Think, an expert synthesizer. Combine the following AI draft responses into one best, accurate, complete answer. Do not mention the drafts or models."
-
-    try:
-        judge_res = await asyncio.wait_for(
-            gemini_client.chat.completions.create(
+        try:
+            response = await gemini_client.chat.completions.create(
                 model="gemini-3.6-flash",
                 messages=[
                     {"role": "system", "content": judge_sys},
                     {"role": "user", "content": f"User question: {user_prompt}\n\nDrafts:\n{context}"}
                 ],
-                temperature=0.3
-            ), timeout=30.0
-        )
-        final_answer = judge_res.choices[0].message.content
-        print("[Synth] Done.")
-    except Exception as e:
-        print(f"[Synth] Failed: {e}. Returning best draft.")
-        final_answer = valid_drafts[0]["text"]
+                temperature=0.3,
+                stream=True
+            )
+            async for chunk in response:
+                if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                    yield f"data: {json.dumps({'type': 'chunk', 'text': chunk.choices[0].delta.content})}\n\n"
+        except Exception as e:
+            # Fallback to the first draft if synthesis fails
+            yield f"data: {json.dumps({'type': 'chunk', 'text': valid_drafts[0]['text']})}\n\n"
+            
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
-    return ChatResponse(
-        final_answer=final_answer,
-        models_used=models_used,
-        category=category,
-        drafts=valid_drafts
-    )
+    return StreamingResponse(synthesize_stream(), media_type="text/event-stream")

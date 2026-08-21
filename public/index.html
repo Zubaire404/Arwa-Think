@@ -163,6 +163,66 @@
             box-shadow: 0 1px 4px rgba(0,0,0,0.3);
         }
 
+        .routing-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .model-select, .custom-select-wrapper {
+            background: var(--ash);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            color: var(--mist);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            padding: 8px 12px;
+            outline: none;
+            cursor: pointer;
+        }
+        .sidebar-custom-picker {
+            padding: 1rem 1rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding-bottom: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        .sidebar-custom-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--fog);
+            letter-spacing: 1px;
+            margin-bottom: 0.8rem;
+            text-transform: uppercase;
+        }
+        .tier-group {
+            margin-bottom: 1rem;
+        }
+        .tier-group:last-child {
+            margin-bottom: 0;
+        }
+        .tier-label {
+            font-size: 0.65rem;
+            color: var(--fog);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            opacity: 0.7;
+        }
+        .custom-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            color: var(--mist);
+            cursor: pointer;
+            padding: 4px 0;
+        }
+        .custom-menu-item input {
+            accent-color: var(--signal-gold);
+            cursor: pointer;
+        }
+
         /* Chat Scroll Area */
         .chat-scroll {
             flex: 1;
@@ -460,6 +520,12 @@
             <div class="brand-subtitle">Multi-model convergence</div>
         </div>
         <button class="new-chat-btn" onclick="startNewChat()">+ New conversation</button>
+        
+        <div class="sidebar-custom-picker" id="sidebar-custom-picker" style="display: none;">
+            <div class="sidebar-custom-title">Custom Synthesis</div>
+            <div id="custom-menu-container"></div>
+        </div>
+
         <div class="history-list" id="history-list">
             <!-- History populated by JS -->
         </div>
@@ -468,10 +534,23 @@
     <div class="main-content">
         <!-- Routing Bar -->
         <div class="routing-bar">
-            <div class="routing-pill" id="routing-options">
-                <div class="routing-opt active" data-mode="Auto">Auto</div>
-                <div class="routing-opt" data-mode="Think">Think</div>
-                <div class="routing-opt" data-mode="Fast">Fast</div>
+            <div class="routing-container">
+                <div class="routing-pill" id="routing-options">
+                    <div class="routing-opt active" data-mode="Auto">Auto</div>
+                    <div class="routing-opt" data-mode="Think">Think</div>
+                    <div class="routing-opt" data-mode="Fast">Fast</div>
+                    <div class="routing-opt" data-mode="Custom">Custom</div>
+                </div>
+                
+                <div class="model-picker-container" id="fast-picker" style="display: none;">
+                    <select id="fast-model-select" class="model-select">
+                        <option value="fw-deepseek-v4-flash">DeepSeek V4 Flash</option>
+                        <option value="fw-nemotron-light">Nemotron Lightning</option>
+                        <option value="fw-minimax-m3">Minimax M3</option>
+                        <option value="fw-gpt-oss-120b">GPT-OSS 120B</option>
+                        <option value="gemini-3.6-flash" selected>Gemini 3.6 Flash</option>
+                    </select>
+                </div>
             </div>
         </div>
 
@@ -513,12 +592,63 @@
 
         let currentMode = "Auto";
         
+        // Populate Custom Menu in Sidebar (Grouped by Tier)
+        const MODEL_TIERS = {
+            "Think": [
+                "DeepSeek V4 Pro", "Qwen 3.8 Max", "Kimi K3", "Muse Glimmer 30B"
+            ],
+            "Medium": [
+                "GLM 5.2", "Kimi K2.7 Code", "Nemotron 3 Ultra", "Inkling", "Qwen 3.7 Plus"
+            ],
+            "Fast": [
+                "DeepSeek V4 Flash", "Nemotron Lightning", "Minimax M3", "GPT-OSS 120B", "Gemini 3.6 Flash"
+            ]
+        };
+
+        const customMenuContainer = document.getElementById('custom-menu-container');
+        
+        Object.entries(MODEL_TIERS).forEach(([tierName, models]) => {
+            let groupHtml = `<div class="tier-group"><div class="tier-label">${tierName}</div>`;
+            
+            models.forEach(name => {
+                const id = "custom-model-" + name.replace(/\s+/g, '-');
+                let apiId = "";
+                if (name === "Gemini 3.6 Flash") apiId = "gemini-3.6-flash";
+                else if (name === "DeepSeek V4 Pro") apiId = "fw-deepseek-v4-pro";
+                else if (name === "Qwen 3.8 Max") apiId = "fw-qwen3p8-max";
+                else if (name === "Kimi K3") apiId = "fw-kimi-k3";
+                else if (name === "Muse Glimmer 30B") apiId = "fw-muse-glimmer";
+                else if (name === "GLM 5.2") apiId = "fw-glm-5p2";
+                else if (name === "Kimi K2.7 Code") apiId = "fw-kimi-k2p7-code";
+                else if (name === "Nemotron 3 Ultra") apiId = "fw-nemotron-ultra";
+                else if (name === "Inkling") apiId = "fw-inkling";
+                else if (name === "Qwen 3.7 Plus") apiId = "fw-qwen3p7-plus";
+                else if (name === "DeepSeek V4 Flash") apiId = "fw-deepseek-v4-flash";
+                else if (name === "Nemotron Lightning") apiId = "fw-nemotron-light";
+                else if (name === "Minimax M3") apiId = "fw-minimax-m3";
+                else if (name === "GPT-OSS 120B") apiId = "fw-gpt-oss-120b";
+                
+                groupHtml += `
+                    <label class="custom-menu-item" for="${id}">
+                        <input type="checkbox" id="${id}" value="${apiId}" class="custom-model-cb">
+                        <div class="badge-dot" style="background:${MODEL_HUES[name]}"></div>
+                        ${name}
+                    </label>
+                `;
+            });
+            groupHtml += `</div>`;
+            customMenuContainer.insertAdjacentHTML('beforeend', groupHtml);
+        });
+
         // Setup routing toggle
         document.querySelectorAll('.routing-opt').forEach(opt => {
             opt.addEventListener('click', (e) => {
                 document.querySelectorAll('.routing-opt').forEach(el => el.classList.remove('active'));
                 e.target.classList.add('active');
                 currentMode = e.target.getAttribute('data-mode');
+                
+                document.getElementById('fast-picker').style.display = currentMode === 'Fast' ? 'block' : 'none';
+                document.getElementById('sidebar-custom-picker').style.display = currentMode === 'Custom' ? 'block' : 'none';
             });
         });
 
@@ -565,8 +695,35 @@
             inputEl.focus();
         }
 
+        let conversations = JSON.parse(localStorage.getItem('arwa_conversations')) || [];
+        let currentChatId = null;
+
+        function renderHistory() {
+            const list = document.getElementById('history-list');
+            list.innerHTML = '';
+            conversations.forEach(chat => {
+                list.insertAdjacentHTML('beforeend', `
+                    <div class="history-item ${chat.id === currentChatId ? 'active' : ''}" onclick="loadChat('${chat.id}')">
+                        ${chat.title}
+                    </div>
+                `);
+            });
+        }
+
+        function loadChat(id) {
+            currentChatId = id;
+            renderHistory();
+            const chat = conversations.find(c => c.id === id);
+            if(chat) {
+                chatContainer.innerHTML = chat.html;
+                chatScroll.scrollTop = chatScroll.scrollHeight;
+            }
+        }
+
         function startNewChat() {
+            currentChatId = null;
             chatContainer.innerHTML = '';
+            renderHistory();
             renderWelcome();
         }
 
@@ -585,6 +742,12 @@
                 chatContainer.innerHTML = '';
             }
 
+            if(!currentChatId) {
+                currentChatId = Date.now().toString();
+                conversations.unshift({ id: currentChatId, title: text.substring(0, 30) + (text.length>30?'...':''), html: '' });
+                renderHistory();
+            }
+
             // Render User Message
             const userHtml = `
                 <div class="message user">
@@ -592,6 +755,13 @@
                 </div>
             `;
             chatContainer.insertAdjacentHTML('beforeend', userHtml);
+            
+            const chat = conversations.find(c => c.id === currentChatId);
+            if(chat) {
+                chat.html = chatContainer.innerHTML;
+                localStorage.setItem('arwa_conversations', JSON.stringify(conversations));
+            }
+
             inputEl.value = '';
             inputEl.style.height = 'auto';
             
@@ -612,6 +782,23 @@
 
             document.getElementById('send-btn').disabled = true;
 
+            // Get Manual Models
+            let selectedModels = [];
+            if (currentMode === 'Think') {
+                selectedModels = [
+                    "fw-deepseek-v4-pro",
+                    "fw-qwen3p8-max",
+                    "fw-kimi-k3",
+                    "fw-muse-glimmer"
+                ];
+            } else if (currentMode === 'Fast') {
+                selectedModels = [document.getElementById('fast-model-select').value];
+            } else if (currentMode === 'Custom') {
+                document.querySelectorAll('.custom-model-cb:checked').forEach(cb => {
+                    selectedModels.push(cb.value);
+                });
+            }
+
             try {
                 const response = await fetch('/chat', {
                     method: 'POST',
@@ -619,57 +806,93 @@
                     body: JSON.stringify({
                         prompt: text,
                         auto_route: currentMode === 'Auto',
-                        manual_models: currentMode === 'Think' ? [
-                            "accounts/fireworks/models/deepseek-v4-pro-0813",
-                            "accounts/fireworks/models/qwen3p8-max",
-                            "accounts/fireworks/models/kimi-k3",
-                            "accounts/fireworks/models/muse-glimmer-30b"
-                        ] : (currentMode === 'Fast' ? ["gemini-3.6-flash"] : [])
+                        manual_models: selectedModels
                     })
                 });
 
-                const data = await response.json();
-                document.getElementById(gatherId).remove();
+                if(!response.ok) throw new Error('Server error');
 
-                if(!response.ok) throw new Error(data.detail || 'Server error');
-
-                // Compute Hues
-                const hues = data.models_used.map(m => MODEL_HUES[m] || 'var(--fog)');
-                let gradient = hues.length === 1 ? hues[0] : `linear-gradient(to bottom, ${hues.join(', ')})`;
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+                let done = false;
                 
-                let dotsHtml = hues.map(h => `<div class="badge-dot" style="background:${h}"></div>`).join('');
-                let badgeLabel = hues.length > 1 ? `Synthesized from ${hues.length} models` : data.models_used[0];
+                // Track state
+                let msgContainerHtml = '';
+                let bubbleId = 'bubble-' + Date.now();
+                let fullText = '';
+                let isFirstChunk = true;
+                let chatObj = conversations.find(c => c.id === currentChatId);
+                
+                while (!done) {
+                    const { value, done: readerDone } = await reader.read();
+                    done = readerDone;
+                    if (value) {
+                        const chunk = decoder.decode(value, {stream: true});
+                        const lines = chunk.split('\n');
+                        for(let line of lines) {
+                            if(line.startsWith('data: ')) {
+                                const dataStr = line.replace('data: ', '').trim();
+                                if(!dataStr) continue;
+                                try {
+                                    const parsed = JSON.parse(dataStr);
+                                    if(parsed.type === 'metadata') {
+                                        // Remove Gathering dots
+                                        document.getElementById(gatherId).remove();
+                                        
+                                        const hues = parsed.models_used.map(m => MODEL_HUES[m] || 'var(--fog)');
+                                        let gradient = hues.length === 1 ? hues[0] : `linear-gradient(to bottom, ${hues.join(', ')})`;
+                                        let dotsHtml = hues.map(h => `<div class="badge-dot" style="background:${h}"></div>`).join('');
+                                        let badgeLabel = hues.length > 1 ? `Synthesized from ${hues.length} models` : parsed.models_used[0];
+                                        
+                                        let draftsHtml = '';
+                                        if(parsed.drafts && parsed.drafts.length > 1) {
+                                            let cards = parsed.drafts.map(d => {
+                                                let h = MODEL_HUES[d.label] || 'var(--fog)';
+                                                return `
+                                                    <div class="draft-card" style="--hue:${h}">
+                                                        <div class="draft-title"><div class="badge-dot" style="background:${h}"></div>${d.label}</div>
+                                                        <div>${marked.parse(d.text)}</div>
+                                                    </div>
+                                                `;
+                                            }).join('');
+                                            draftsHtml = `
+                                                <div class="drafts-container">
+                                                    <div class="drafts-toggle" onclick="toggleDrafts(this)">▶ View individual AI drafts</div>
+                                                    <div class="drafts-grid">${cards}</div>
+                                                </div>
+                                            `;
+                                        }
 
-                let draftsHtml = '';
-                if(data.drafts && data.drafts.length > 1) {
-                    let cards = data.drafts.map(d => {
-                        let h = MODEL_HUES[d.label] || 'var(--fog)';
-                        return `
-                            <div class="draft-card" style="--hue:${h}">
-                                <div class="draft-title"><div class="badge-dot" style="background:${h}"></div>${d.label}</div>
-                                <div>${marked.parse(d.text)}</div>
-                            </div>
-                        `;
-                    }).join('');
-                    
-                    draftsHtml = `
-                        <div class="drafts-container">
-                            <div class="drafts-toggle" onclick="toggleDrafts(this)">▶ View individual AI drafts</div>
-                            <div class="drafts-grid">${cards}</div>
-                        </div>
-                    `;
+                                        const ansHtml = `
+                                            <div class="message assistant">
+                                                <div class="badge">${dotsHtml}<span class="badge-text">${badgeLabel}</span></div>
+                                                <div class="spine" style="--spine-gradient:${gradient}"></div>
+                                                <div class="message-bubble" id="${bubbleId}"></div>
+                                                ${draftsHtml}
+                                            </div>
+                                        `;
+                                        chatContainer.insertAdjacentHTML('beforeend', ansHtml);
+                                        
+                                    } else if (parsed.type === 'chunk') {
+                                        fullText += parsed.text;
+                                        document.getElementById(bubbleId).innerHTML = marked.parse(fullText);
+                                        chatScroll.scrollTop = chatScroll.scrollHeight;
+                                    } else if (parsed.type === 'error') {
+                                        throw new Error(parsed.text);
+                                    }
+                                } catch(e) {
+                                    // Parse error or manual throw
+                                }
+                            }
+                        }
+                    }
                 }
-
-                const ansHtml = `
-                    <div class="message assistant">
-                        <div class="badge">${dotsHtml}<span class="badge-text">${badgeLabel}</span></div>
-                        <div class="spine" style="--spine-gradient:${gradient}"></div>
-                        <div class="message-bubble">${marked.parse(data.final_answer)}</div>
-                        ${draftsHtml}
-                    </div>
-                `;
                 
-                chatContainer.insertAdjacentHTML('beforeend', ansHtml);
+                // Final save to local storage
+                if(chatObj) {
+                    chatObj.html = chatContainer.innerHTML;
+                    localStorage.setItem('arwa_conversations', JSON.stringify(conversations));
+                }
 
             } catch (err) {
                 document.getElementById(gatherId).remove();
@@ -678,6 +901,11 @@
                         <div class="message-bubble" style="color:#ef8354">Error: ${err.message}</div>
                     </div>
                 `);
+                
+                if(chat) {
+                    chat.html = chatContainer.innerHTML;
+                    localStorage.setItem('arwa_conversations', JSON.stringify(conversations));
+                }
             }
 
             document.getElementById('send-btn').disabled = false;
@@ -685,6 +913,7 @@
         }
 
         // Init
+        renderHistory();
         renderWelcome();
     </script>
 </body>
